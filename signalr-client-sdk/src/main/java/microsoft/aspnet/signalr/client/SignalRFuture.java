@@ -7,7 +7,6 @@ See License.txt in the project root for license information.
 package microsoft.aspnet.signalr.client;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -24,42 +23,48 @@ public class SignalRFuture<V> implements Future<V> {
     boolean mIsCancelled = false;
     boolean mIsDone = false;
     private V mResult = null;
-    private List<Runnable> mOnCancelled = Collections.synchronizedList(new ArrayList<Runnable>());
-    private List<Action<V>> mOnDone = Collections.synchronizedList(new ArrayList<Action<V>>());
-    private Object mDoneLock = new Object();
-    private List<ErrorCallback> mErrorCallback = Collections.synchronizedList(new ArrayList<ErrorCallback>());
+    private List<Runnable> mOnCancelled = new ArrayList<Runnable>();
+    private final Object mCancelledLock = new Object();
+    private List<Action<V>> mOnDone = new ArrayList<Action<V>>();
+    private final Object mDoneLock = new Object();
+    private List<ErrorCallback> mErrorCallback = new ArrayList<ErrorCallback>();
+    private final Object mErrorLock = new Object();
     private Queue<Throwable> mErrorQueue = new ConcurrentLinkedQueue<Throwable>();
-    private Object mErrorLock = new Object();
     private Throwable mLastError = null;
 
     private Semaphore mResultSemaphore = new Semaphore(0);
 
     /**
      * Handles the cancellation event
-     * 
+     *
      * @param onCancelled
      *            The handler
      */
     public void onCancelled(Runnable onCancelled) {
-        mOnCancelled.add(onCancelled);
+        synchronized (mCancelledLock) {
+            mOnCancelled.add(onCancelled);
+        }
     }
 
     /**
      * Cancels the operation
      */
     public void cancel() {
-        mIsCancelled = true;
-        if (mOnCancelled != null) {
-            for (Runnable onCancelled : mOnCancelled) {
-                onCancelled.run();
+        synchronized (mCancelledLock) {
+            mIsCancelled = true;
+            if (mOnCancelled != null) {
+                for (Runnable onCancelled : mOnCancelled) {
+                    onCancelled.run();
+                }
             }
         }
+
         mResultSemaphore.release();
     }
 
     /**
      * Sets a result to the future and finishes its execution
-     * 
+     *
      * @param result
      *            The future result
      */
@@ -84,7 +89,7 @@ public class SignalRFuture<V> implements Future<V> {
 
     /**
      * Indicates if the operation is cancelled
-     * 
+     *
      * @return True if the operation is cancelled
      */
     public boolean isCancelled() {
@@ -129,7 +134,7 @@ public class SignalRFuture<V> implements Future<V> {
     /**
      * Handles the completion of the Future. If the future was already
      * completed, it triggers the handler right away.
-     * 
+     *
      * @param action
      *            The handler
      */
@@ -153,7 +158,7 @@ public class SignalRFuture<V> implements Future<V> {
      * Handles error during the execution of the Future. If it's the first time
      * the method is invoked on the object and errors were already triggered,
      * the handler will be called once per error, right away.
-     * 
+     *
      * @param errorCallback
      *            The handler
      */
@@ -173,7 +178,7 @@ public class SignalRFuture<V> implements Future<V> {
 
     /**
      * Triggers an error for the Future
-     * 
+     *
      * @param error
      *            The error
      */
@@ -190,10 +195,10 @@ public class SignalRFuture<V> implements Future<V> {
             }
         }
     }
-    
+
     /**
      * Indicates if an error was triggered
-     * 
+     *
      * @return True if an error was triggered
      */
     public boolean errorWasTriggered() {
